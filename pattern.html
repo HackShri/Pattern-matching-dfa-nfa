@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Pattern Matching Engine</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        #nfaDisplay {
+            margin-top: 20px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            background-color: #f8f8f8;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        #controls {
+            margin-top: 20px;
+            display: flex;
+            justify-content: space-between;
+        }
+        #controls button {
+            width: 48%;
+        }
+        #visualization {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Advanced Pattern Matching Engine</h1>
+    <div class="input-group">
+        <label for="patternChar">Enter Pattern:</label>
+        <input type="text" id="patternChar">
+    </div>
+    <div class="input-group">
+        <label for="testString">Enter Test String:</label>
+        <input type="text" id="testString">
+    </div>
+    <div class="input-group">
+        <label for="options">Options:</label>
+        <select id="options">
+            <option value="case-sensitive">Case-Sensitive</option>
+            <option value="case-insensitive">Case-Insensitive</option>
+            <option value="greedy">Greedy Matching</option>
+            <option value="non-greedy">Non-Greedy Matching</option>
+        </select>
+    </div>
+    <div id="controls">
+        <button onclick="processInputs()">Process</button>
+        <button onclick="resetInputs()">Reset</button>
+    </div>
+    <div id="result"></div>
+    <div id="nfaDisplay"></div>
+    <canvas id="visualization" width="800" height="400"></canvas>
+
+    <script>
+        class NFAState {
+            constructor(stateId, transition = null) {
+                this.stateId = stateId;
+                this.transition = transition;
+                this.next = [null, null];
+            }
+        }
+
+        class NFA {
+            constructor() {
+                this.start = null;
+                this.end = null;
+            }
+        }
+
+        let nfaStateCount = 0;
+
+        function createNFAState(transition) {
+            const state = new NFAState(nfaStateCount, transition);
+            nfaStateCount++;
+            return state;
+        }
+
+        function createBasicNFA(char) {
+            const nfa = new NFA();
+            nfa.start = createNFAState(null);
+            nfa.end = createNFAState(null);
+            nfa.start.transition = char;
+            nfa.start.next[0] = nfa.end;
+            return nfa;
+        }
+
+        function kleeneStarNFA(nfa) {
+            const result = new NFA();
+            result.start = createNFAState(null);
+            result.end = createNFAState(null);
+
+            result.start.next[0] = nfa.start;
+            result.start.next[1] = result.end;
+
+            nfa.end.transition = null;
+            nfa.end.next[0] = nfa.start;
+            nfa.end.next[1] = result.end;
+
+            return result;
+        }
+
+        function processPattern(pattern) {
+            // Extend this logic to parse complex patterns
+            let stack = [];
+
+            for (let char of pattern) {
+                if (char === '*') {
+                    const nfa = stack.pop();
+                    stack.push(kleeneStarNFA(nfa));
+                } else {
+                    stack.push(createBasicNFA(char));
+                }
+            }
+
+            return stack.pop();
+        }
+
+        function processInputs() {
+            const pattern = document.getElementById('patternChar').value;
+            const testString = document.getElementById('testString').value;
+            const options = document.getElementById('options').value;
+            const resultDiv = document.getElementById('result');
+            const nfaDisplayDiv = document.getElementById('nfaDisplay');
+
+            if (!pattern || !testString) {
+                resultDiv.textContent = "Error: Both fields must be filled.";
+                return;
+            }
+
+            let nfa = processPattern(pattern);
+            const isMatch = matchPattern(nfa, testString, options);
+
+            resultDiv.textContent = isMatch
+                ? `Pattern '${pattern}' matches string '${testString}': Yes`
+                : `Pattern '${pattern}' does not match string '${testString}': No`;
+
+            nfaDisplayDiv.textContent = printNFA(nfa.start);
+            visualizeNFA(nfa);
+        }
+
+        function resetInputs() {
+            document.getElementById('patternChar').value = '';
+            document.getElementById('testString').value = '';
+            document.getElementById('result').textContent = '';
+            document.getElementById('nfaDisplay').textContent = '';
+            const canvas = document.getElementById('visualization');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function printNFA(state, visited = new Set()) {
+            if (!state || visited.has(state.stateId)) {
+                return "";
+            }
+            visited.add(state.stateId);
+
+            let output = "";
+            if (state.transition) {
+                output += `State ${state.stateId} --${state.transition}--> State ${state.next[0].stateId}\n`;
+                output += printNFA(state.next[0], visited);
+            } else {
+                if (state.next[0]) {
+                    output += `State ${state.stateId} --eps--> State ${state.next[0].stateId}\n`;
+                    output += printNFA(state.next[0], visited);
+                }
+                if (state.next[1]) {
+                    output += `State ${state.stateId} --eps--> State ${state.next[1].stateId}\n`;
+                    output += printNFA(state.next[1], visited);
+                }
+            }
+            return output;
+        }
+
+        function visualizeNFA(nfa) {
+            const canvas = document.getElementById('visualization');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const states = [];
+            const edges = [];
+
+            function traverse(state, x, y, visited = new Set()) {
+                if (!state || visited.has(state.stateId)) return;
+                visited.add(state.stateId);
+                states.push({ id: state.stateId, x, y });
+
+                if (state.transition && state.next[0]) {
+                    edges.push({ from: state.stateId, to: state.next[0].stateId, label: state.transition });
+                    traverse(state.next[0], x + 100, y + 50, visited);
+                } else {
+                    if (state.next[0]) {
+                        edges.push({ from: state.stateId, to: state.next[0].stateId, label: "eps" });
+                        traverse(state.next[0], x + 100, y - 50, visited);
+                    }
+                    if (state.next[1]) {
+                        edges.push({ from: state.stateId, to: state.next[1].stateId, label: "eps" });
+                        traverse(state.next[1], x + 100, y + 50, visited);
+                    }
+                }
+            }
+
+            traverse(nfa.start, 50, 200);
+
+            ctx.font = "14px Arial";
+            ctx.textAlign = "center";
+
+            states.forEach(({ id, x, y }) => {
+                ctx.beginPath();
+                ctx.arc(x, y, 20, 0, 2 * Math.PI);
+                ctx.fillStyle = "#3498db";
+                ctx.fill();
+                ctx.strokeStyle = "#2980b9";
+                ctx.stroke();
+                ctx.fillStyle = "#fff";
+                ctx.fillText(id, x, y + 5);
+            });
+
+            edges.forEach(({ from, to, label }) => {
+                const fromState = states.find(s => s.id === from);
+                const toState = states.find(s => s.id === to);
+                if (!fromState || !toState) return;
+
+                const dx = toState.x - fromState.x;
+                const dy = toState.y - fromState.y;
+                const angle = Math.atan2(dy, dx);
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                ctx.beginPath();
+                ctx.moveTo(fromState.x + 20 * Math.cos(angle), fromState.y + 20 * Math.sin(angle));
+                ctx.lineTo(toState.x - 20 * Math.cos(angle), toState.y - 20 * Math.sin(angle));
+                ctx.strokeStyle = "#333";
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(toState.x - 20 * Math.cos(angle), toState.y - 20 * Math.sin(angle));
+                ctx.lineTo(
+                    toState.x - 30 * Math.cos(angle - Math.PI / 6),
+                    toState.y - 30 * Math.sin(angle - Math.PI / 6)
+                );
+                ctx.lineTo(
+                    toState.x - 30 * Math.cos(angle + Math.PI / 6),
+                    toState.y - 30 * Math.sin(angle + Math.PI / 6)
+                );
+                ctx.closePath();
+                ctx.fillStyle = "#333";
+                ctx.fill();
+
+                ctx.fillStyle = "#000";
+                ctx.fillText(label, (fromState.x + toState.x) / 2, (fromState.y + toState.y) / 2 - 10);
+            });
+        }
+
+        function matchPattern(nfa, string, options) {
+            let currentStates = new Set([nfa.start]);
+
+            for (let char of string) {
+                let nextStates = new Set();
+                for (let state of currentStates) {
+                    if (state.transition === char || state.transition === null) {
+                        if (state.transition === char || options === "case-insensitive") {
+                            nextStates.add(state.next[0]);
+                        }
+                        if (!state.transition) {
+                            if (state.next[0]) nextStates.add(state.next[0]);
+                            if (state.next[1]) nextStates.add(state.next[1]);
+                        }
+                    }
+                }
+                currentStates = nextStates;
+            }
+
+            return Array.from(currentStates).some(state => state === nfa.end);
+        }
+    </script>
+</body>
+</html>
